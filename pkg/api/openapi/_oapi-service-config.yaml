@@ -1,0 +1,10 @@
+package: secret
+output: api/openapi/secret-service.go
+generate:
+  gin-server: true
+  models: true
+output-options:
+  skip-prune: false
+import-mapping:
+  ../secret-schema.yaml: "-"
+  ./secret-schema.yaml: "-"

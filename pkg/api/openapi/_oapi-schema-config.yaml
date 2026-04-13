@@ -1,0 +1,9 @@
+package: secret
+output: api/openapi/secret-schema.go
+generate:
+  models: true
+output-options:
+  skip-prune: true
+import-mapping:
+  ../secret-schema.yaml: "-"
+  ./secret-schema.yaml: "-"

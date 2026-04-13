@@ -1,0 +1,25 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./query/"
+    schema:
+      - "./migration/"
+    gen:
+      go:
+        package: "repository"
+        sql_package: "pgx/v5"
+        out: "./repository"
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_json_tags: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "varchar"
+            go_type: "string"
+          - db_type: "text"
+            go_type: "string"

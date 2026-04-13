@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(mv pkg/db/migration/20260402000000_outbox.sql pkg/db/migration/20260402000000_secret.sql)",
+      "Bash(mv pkg/db/query/outbox.sql pkg/db/query/secret.sql)",
+      "Bash(mv pkg/db/repository/outbox.sql.go pkg/db/repository/secret.sql.go)",
+      "Bash(mv pkg/service/outbox_service.go pkg/service/secret_service.go)",
+      "Bash(mv pkg/service/outbox_service_test.go pkg/service/secret_service_test.go)",
+      "Bash(mv api/openapi/outbox-schema.go api/openapi/secret-schema.go)",
+      "Bash(mv api/openapi/outbox-service.go api/openapi/secret-service.go)",
+      "Bash(mv pkg/api/openapi/outbox-api.yaml pkg/api/openapi/secret-api.yaml)",
+      "Bash(mv pkg/api/openapi/outbox-schema.yaml pkg/api/openapi/secret-schema.yaml)",
+      "Bash(mv pkg/api/openapi/parts/outbox-message-schema.yaml pkg/api/openapi/parts/secret-schema.yaml)",
+      "Bash(mv backend/src/api/openapi/outbox backend/src/api/openapi/secret)",
+      "Bash(mv backend/src/api/openapi/secret/outbox-schema.go backend/src/api/openapi/secret/secret-schema.go)",
+      "Bash(mv backend/src/api/openapi/secret/outbox-service.go backend/src/api/openapi/secret/secret-service.go)"
+    ]
+  }
+}
