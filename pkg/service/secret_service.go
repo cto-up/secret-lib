@@ -56,15 +56,25 @@ func NewService(store *db.Store, keyStore *crypto.KeyStore) *Service {
 
 // StoreSecret encrypts the plaintext value and persists it.
 func (s *Service) StoreSecret(ctx context.Context, sec Secret) error {
+	_, err := s.CreateSecret(ctx, sec)
+	return err
+}
+
+// CreateSecret encrypts + persists a new secret and returns the
+// stored row so HTTP handlers can build a response DTO without
+// re-querying. Keeps the encrypt-then-insert dance inside this
+// package (the store API takes pre-encrypted bytes; the handler
+// must not touch plaintext beyond passing it here).
+func (s *Service) CreateSecret(ctx context.Context, sec Secret) (repository.SecrSecret, error) {
 	params, err := s.buildCreateParams(sec)
 	if err != nil {
-		return err
+		return repository.SecrSecret{}, err
 	}
-	_, err = s.store.CreateSecret(ctx, params)
+	row, err := s.store.CreateSecret(ctx, params)
 	if err != nil {
-		return fmt.Errorf("secret.StoreSecret: %w", err)
+		return repository.SecrSecret{}, fmt.Errorf("secret.CreateSecret: %w", err)
 	}
-	return nil
+	return row, nil
 }
 
 // StoreSecretTx encrypts the plaintext value and persists it inside an existing pgx.Tx.

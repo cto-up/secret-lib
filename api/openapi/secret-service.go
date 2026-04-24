@@ -26,11 +26,17 @@ type ListSecretsParams struct {
 	PageSize *int    `form:"page_size,omitempty" json:"page_size,omitempty"`
 }
 
+// CreateSecretJSONRequestBody defines body for CreateSecret for application/json ContentType.
+type CreateSecretJSONRequestBody = CreateSecretRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
 	// (GET /admin-api/v1/secret/secrets)
 	ListSecrets(c *gin.Context, params ListSecretsParams)
+
+	// (POST /admin-api/v1/secret/secrets)
+	CreateSecret(c *gin.Context)
 
 	// (DELETE /admin-api/v1/secret/secrets/{id})
 	DeleteSecret(c *gin.Context, id openapi_types.UUID)
@@ -104,6 +110,19 @@ func (siw *ServerInterfaceWrapper) ListSecrets(c *gin.Context) {
 	}
 
 	siw.Handler.ListSecrets(c, params)
+}
+
+// CreateSecret operation middleware
+func (siw *ServerInterfaceWrapper) CreateSecret(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.CreateSecret(c)
 }
 
 // DeleteSecret operation middleware
@@ -182,6 +201,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/admin-api/v1/secret/secrets", wrapper.ListSecrets)
+	router.POST(options.BaseURL+"/admin-api/v1/secret/secrets", wrapper.CreateSecret)
 	router.DELETE(options.BaseURL+"/admin-api/v1/secret/secrets/:id", wrapper.DeleteSecret)
 	router.POST(options.BaseURL+"/admin-api/v1/secret/secrets/:id/revoke", wrapper.RevokeSecret)
 }

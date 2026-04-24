@@ -3,27 +3,36 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"ctoup.com/coreapp/api/helpers"
 	"ctoup.com/coreapp/pkg/shared/auth"
 	api "github.com/cto-up/secret-lib/api/openapi"
 	"github.com/cto-up/secret-lib/pkg/db"
 	"github.com/cto-up/secret-lib/pkg/db/repository"
+	"github.com/cto-up/secret-lib/pkg/service"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/oapi-codegen/runtime/types"
 )
 
 type SecretHandler struct {
-	store *db.Store
+	store   *db.Store
+	service *service.Service // optional; required only for createSecret
 }
 
-func NewSecretHandler(store *db.Store) *SecretHandler {
-	return &SecretHandler{store: store}
+func NewSecretHandler(store *db.Store, svc *service.Service) *SecretHandler {
+	return &SecretHandler{store: store, service: svc}
 }
 
-func RegisterHandler(store *db.Store, options api.GinServerOptions, router *gin.Engine) {
-	h := NewSecretHandler(store)
+// RegisterHandler wires the secret admin endpoints under
+// /admin-api/v1/secret/secrets. `svc` is optional: when nil, the
+// read-only endpoints (list/delete/revoke) still work but CreateSecret
+// returns 503 with a clear "secret service not configured" message.
+// That matches the key-store-absent mode the rest of the stack
+// tolerates for local-dev / tests.
+func RegisterHandler(store *db.Store, svc *service.Service, options api.GinServerOptions, router *gin.Engine) {
+	h := NewSecretHandler(store, svc)
 	api.RegisterHandlersWithOptions(router, h, options)
 }
 
@@ -82,6 +91,63 @@ func (h *SecretHandler) ListSecrets(c *gin.Context, params api.ListSecretsParams
 	c.JSON(http.StatusOK, result)
 }
 
+// CreateSecret implements api.ServerInterface.
+// ADMIN / CUSTOMER_ADMIN / SUPER_ADMIN can create — gate is the
+// union because auth.IsAdmin only matches the literal ADMIN role
+// and we'd lock out SUPER_ADMIN otherwise. Tenant is taken from
+// the caller's context; cross-tenant creation is not supported
+// via this endpoint by design.
+func (h *SecretHandler) CreateSecret(c *gin.Context) {
+	if !auth.IsAdmin(c) && !auth.IsSuperAdmin(c) && !auth.IsCustomerAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin privileges required"})
+		return
+	}
+	if h.service == nil {
+		c.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": "secret service not configured (set SECRET_ENCRYPTION_KEY)"})
+		return
+	}
+
+	var req api.CreateSecretRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, helpers.ErrorResponse(err))
+		return
+	}
+	if req.Name == "" || req.Value == "" || req.ConnectorType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, value and connector_type are required"})
+		return
+	}
+
+	tenantID := c.GetString(auth.AUTH_TENANT_ID_KEY)
+	userID := c.GetString(auth.AUTH_USER_ID)
+
+	desc := ""
+	if req.Description != nil {
+		desc = *req.Description
+	}
+
+	row, err := h.service.CreateSecret(c, service.Secret{
+		Name:          req.Name,
+		Value:         req.Value,
+		ConnectorType: req.ConnectorType,
+		Description:   desc,
+		TenantID:      tenantID,
+		CreatedBy:     userID,
+	})
+	if err != nil {
+		// A unique-index violation on (tenant_id, name) where
+		// status='active' means the name is already in use. We
+		// surface 409 so the UI can suggest a different name.
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "a secret with this name already exists for the tenant"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, helpers.ErrorResponse(err))
+		return
+	}
+	c.JSON(http.StatusCreated, mapToDTO(row))
+}
+
 // RevokeSecret implements api.ServerInterface.
 func (h *SecretHandler) RevokeSecret(c *gin.Context, id types.UUID) {
 	row, err := h.store.RevokeSecret(c, id)
@@ -110,6 +176,19 @@ func (h *SecretHandler) DeleteSecret(c *gin.Context, id types.UUID) {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 var noRows = errors.New("no rows in result set")
+
+// isUniqueViolation checks for the Postgres unique_violation
+// SQLSTATE (23505). We avoid a hard dependency on pgx by doing a
+// substring match — cheap, robust to driver wrapping.
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "23505") ||
+		strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "already exists")
+}
 
 func mapToDTO(row repository.SecrSecret) api.Secret {
 	dto := api.Secret{

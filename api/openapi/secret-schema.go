@@ -15,6 +15,21 @@ const (
 	Revoked SecretStatus = "revoked"
 )
 
+// CreateSecretRequest Payload for POST /admin-api/v1/secret/secrets. `value`
+// is stored encrypted (AES-256-GCM); it is never echoed
+// back by any endpoint.
+type CreateSecretRequest struct {
+	// ConnectorType Consumer hint (lre_api, smtp, openai…)
+	ConnectorType string  `json:"connector_type"`
+	Description   *string `json:"description"`
+
+	// Name Unique name within the tenant
+	Name string `json:"name"`
+
+	// Value Plaintext; encrypted at rest
+	Value string `json:"value"`
+}
+
 // Secret defines model for Secret.
 type Secret struct {
 	// ConnectorType Type of connector this secret belongs to (e.g. smtp, slack, stripe)
