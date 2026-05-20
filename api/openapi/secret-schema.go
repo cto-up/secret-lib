@@ -30,6 +30,50 @@ type CreateSecretRequest struct {
 	Value string `json:"value"`
 }
 
+// GenerateSecretRequest Payload for POST /admin-api/v1/secret/secrets/generate.
+// Server mints a strong random value (crypto/rand → hex)
+// and stores it encrypted. The plaintext is returned in the
+// response exactly once — never persisted in plaintext nor
+// retrievable later.
+type GenerateSecretRequest struct {
+	// ConnectorType Consumer hint (lre_api, smtp, openai, webhook-hmac…)
+	ConnectorType string  `json:"connector_type"`
+	Description   *string `json:"description"`
+
+	// LengthBytes Number of random bytes to mint before hex-encoding (default 32 → 64 hex chars). Capped at 128.
+	LengthBytes *int `json:"length_bytes,omitempty"`
+
+	// Name Unique name within the tenant
+	Name string `json:"name"`
+}
+
+// GeneratedSecret One-time response from POST /admin-api/v1/secret/secrets/generate.
+// `value` is the plaintext that the caller must capture now — it is
+// never retrievable from any other endpoint.
+type GeneratedSecret struct {
+	Secret struct {
+		// ConnectorType Type of connector this secret belongs to (e.g. smtp, slack, stripe)
+		ConnectorType string    `json:"connector_type"`
+		CreatedAt     time.Time `json:"created_at"`
+		CreatedBy     *string   `json:"created_by"`
+
+		// Description Optional human-readable note about this secret
+		Description *string            `json:"description"`
+		Id          openapi_types.UUID `json:"id"`
+
+		// Name Human-readable name for this secret, unique per tenant
+		Name string `json:"name"`
+
+		// Status Status of a secret
+		Status    SecretStatus `json:"status"`
+		TenantId  *string      `json:"tenant_id"`
+		UpdatedAt time.Time    `json:"updated_at"`
+	} `json:"secret"`
+
+	// Value Plaintext value of the newly-minted secret. Shown once.
+	Value string `json:"value"`
+}
+
 // Secret defines model for Secret.
 type Secret struct {
 	// ConnectorType Type of connector this secret belongs to (e.g. smtp, slack, stripe)

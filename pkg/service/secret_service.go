@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/cto-up/secret-lib/pkg/crypto"
@@ -11,6 +13,19 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+// DefaultGeneratedSecretBytes is the default randomness for GenerateSecret.
+// 32 bytes (→ 64 hex chars) is comfortably above the 256-bit threshold for
+// HMAC-SHA256 keys and gives plenty of margin for future schemes.
+const DefaultGeneratedSecretBytes = 32
+
+// MaxGeneratedSecretBytes is the cap accepted by GenerateSecret. Beyond this
+// the secret is almost certainly being used as a payload, not a key.
+const MaxGeneratedSecretBytes = 128
+
+// MinGeneratedSecretBytes is the floor. 16 bytes is the smallest size where
+// brute-force is computationally infeasible for current/near-future attackers.
+const MinGeneratedSecretBytes = 16
 
 // Secret is the caller-facing type for storing a connector secret.
 // Callers pass the plaintext Value — the service encrypts it internally.
@@ -75,6 +90,41 @@ func (s *Service) CreateSecret(ctx context.Context, sec Secret) (repository.Secr
 		return repository.SecrSecret{}, fmt.Errorf("secret.CreateSecret: %w", err)
 	}
 	return row, nil
+}
+
+// GenerateSecret mints a strong random value (hex-encoded) and stores it as
+// a new Secret, returning both the persisted row and the plaintext so the
+// caller can show it to the user exactly once.
+//
+// Use this when the caller has no pre-existing value (HMAC keys, internal
+// signing keys). The plaintext is never logged and never recoverable after
+// this call — the database only sees the encrypted form.
+//
+// lengthBytes is clamped to [MinGeneratedSecretBytes, MaxGeneratedSecretBytes].
+// 0 means "use DefaultGeneratedSecretBytes."
+func (s *Service) GenerateSecret(ctx context.Context, sec Secret, lengthBytes int) (repository.SecrSecret, string, error) {
+	if lengthBytes == 0 {
+		lengthBytes = DefaultGeneratedSecretBytes
+	}
+	if lengthBytes < MinGeneratedSecretBytes {
+		lengthBytes = MinGeneratedSecretBytes
+	}
+	if lengthBytes > MaxGeneratedSecretBytes {
+		lengthBytes = MaxGeneratedSecretBytes
+	}
+
+	buf := make([]byte, lengthBytes)
+	if _, err := cryptorand.Read(buf); err != nil {
+		return repository.SecrSecret{}, "", fmt.Errorf("secret.GenerateSecret: rand: %w", err)
+	}
+	plaintext := hex.EncodeToString(buf)
+
+	sec.Value = plaintext
+	row, err := s.CreateSecret(ctx, sec)
+	if err != nil {
+		return repository.SecrSecret{}, "", err
+	}
+	return row, plaintext, nil
 }
 
 // StoreSecretTx encrypts the plaintext value and persists it inside an existing pgx.Tx.

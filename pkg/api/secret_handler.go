@@ -148,6 +148,65 @@ func (h *SecretHandler) CreateSecret(c *gin.Context) {
 	c.JSON(http.StatusCreated, mapToDTO(row))
 }
 
+// GenerateSecret implements api.ServerInterface.
+// Mints a new secret with a server-side random value. The plaintext is
+// returned in the response exactly once and never recoverable afterwards.
+// Same auth gate as CreateSecret — admins only.
+func (h *SecretHandler) GenerateSecret(c *gin.Context) {
+	if !auth.IsAdmin(c) && !auth.IsSuperAdmin(c) && !auth.IsCustomerAdmin(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "admin privileges required"})
+		return
+	}
+	if h.service == nil {
+		c.JSON(http.StatusServiceUnavailable,
+			gin.H{"error": "secret service not configured (set SECRET_ENCRYPTION_KEY)"})
+		return
+	}
+
+	var req api.GenerateSecretRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, helpers.ErrorResponse(err))
+		return
+	}
+	if req.Name == "" || req.ConnectorType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name and connector_type are required"})
+		return
+	}
+
+	tenantID := c.GetString(auth.AUTH_TENANT_ID_KEY)
+	userID := c.GetString(auth.AUTH_USER_ID)
+
+	desc := ""
+	if req.Description != nil {
+		desc = *req.Description
+	}
+	lengthBytes := 0
+	if req.LengthBytes != nil {
+		lengthBytes = *req.LengthBytes
+	}
+
+	row, plaintext, err := h.service.GenerateSecret(c, service.Secret{
+		Name:          req.Name,
+		ConnectorType: req.ConnectorType,
+		Description:   desc,
+		TenantID:      tenantID,
+		CreatedBy:     userID,
+	}, lengthBytes)
+	if err != nil {
+		if isUniqueViolation(err) {
+			c.JSON(http.StatusConflict, gin.H{"error": "a secret with this name already exists for the tenant"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, helpers.ErrorResponse(err))
+		return
+	}
+	secret := mapToDTO(row)
+	c.JSON(http.StatusCreated, api.GeneratedSecret{
+		Secret: secret,
+		Value:  plaintext,
+	})
+}
+
 // RevokeSecret implements api.ServerInterface.
 func (h *SecretHandler) RevokeSecret(c *gin.Context, id types.UUID) {
 	row, err := h.store.RevokeSecret(c, id)
