@@ -119,7 +119,7 @@ func (q *Queries) GetSecretByID(ctx context.Context, id uuid.UUID) (SecrSecret, 
 const getSecretByName = `-- name: GetSecretByName :one
 SELECT id, name, encrypted_value, key_version, connector_type, description, status, tenant_id, created_by, created_at, updated_at FROM secr_secrets
 WHERE name = $1
-  AND ($2::text IS NULL OR tenant_id = $2)
+  AND tenant_id IS NOT DISTINCT FROM $2::text
   AND status = 'active'
 `
 
@@ -128,6 +128,11 @@ type GetSecretByNameParams struct {
 	TenantID pgtype.Text `json:"tenant_id"`
 }
 
+// tenant_id is matched with IS NOT DISTINCT FROM, so a NULL argument means
+// "the platform-scoped row" (tenant_id IS NULL) and NOT "any tenant's row".
+// The previous (narg IS NULL OR tenant_id = narg) form collapsed to TRUE on a
+// NULL argument and returned an arbitrary tenant's secret — a cross-tenant
+// credential leak, since the query has no ORDER BY.
 func (q *Queries) GetSecretByName(ctx context.Context, arg GetSecretByNameParams) (SecrSecret, error) {
 	row := q.db.QueryRow(ctx, getSecretByName, arg.Name, arg.TenantID)
 	var i SecrSecret

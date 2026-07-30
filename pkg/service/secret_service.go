@@ -157,6 +157,15 @@ func (s *Service) GetDecryptedValue(ctx context.Context, id uuid.UUID) (string, 
 
 // GetDecryptedValueByName retrieves an active secret by name and tenant, and decrypts it.
 // Connectors should use this to look up their secrets at runtime.
+//
+// tenantID selects the scope exactly, never approximately:
+//
+//   - "<tid>" → that tenant's row only.
+//   - ""      → the PLATFORM row (tenant_id IS NULL) only.
+//
+// An empty tenantID does not mean "any tenant". Callers wanting the
+// tenant-first, platform-fallback behaviour must ask for the two scopes in
+// turn; this method never falls back on its own.
 func (s *Service) GetDecryptedValueByName(ctx context.Context, name, tenantID string) (string, error) {
 	row, err := s.store.GetSecretByName(ctx, repository.GetSecretByNameParams{
 		Name:     name,

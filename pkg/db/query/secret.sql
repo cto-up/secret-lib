@@ -31,9 +31,14 @@ WHERE (sqlc.narg('tenant_id')::text IS NULL OR tenant_id = sqlc.narg('tenant_id'
 SELECT * FROM secr_secrets WHERE id = $1;
 
 -- name: GetSecretByName :one
+-- tenant_id is matched with IS NOT DISTINCT FROM, so a NULL argument means
+-- "the platform-scoped row" (tenant_id IS NULL) and NOT "any tenant's row".
+-- The previous (narg IS NULL OR tenant_id = narg) form collapsed to TRUE on a
+-- NULL argument and returned an arbitrary tenant's secret — a cross-tenant
+-- credential leak, since the query has no ORDER BY.
 SELECT * FROM secr_secrets
 WHERE name = $1
-  AND (sqlc.narg('tenant_id')::text IS NULL OR tenant_id = sqlc.narg('tenant_id'))
+  AND tenant_id IS NOT DISTINCT FROM sqlc.narg('tenant_id')::text
   AND status = 'active';
 
 -- name: UpdateSecret :one
