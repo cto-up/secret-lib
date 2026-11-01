@@ -208,7 +208,7 @@ Connectors should look up secrets by name using `GetDecryptedValueByName()`. Onl
 | `make postgresdown`                       | Stop local PostgreSQL                            |
 | `make sqlc`                               | Regenerate `pkg/db/repository/` from SQL queries |
 | `make openapi`                            | Regenerate Go server stubs and TypeScript client |
-| `make update-core-backend VERSION=v0.x.x` | Bump `ctoup.com/coreapp` dependency              |
+| `make update-core-backend VERSION=v0.x.x` | Bump `github.com/cto-up/core-lib` dependency              |
 | `make release VERSION=v0.x.x NOTES="..."` | Create a GitHub release                          |
 
 ### Code generation

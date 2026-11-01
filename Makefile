@@ -59,7 +59,7 @@ update-core-backend:
 		echo "Error: VERSION parameter is required. Use 'vx.x.x' format."; \
 		exit 1; \
 	fi
-	go get -u ctoup.com/coreapp@$(VERSION)
+	go get -u github.com/cto-up/core-lib@$(VERSION)
 
 
 release:

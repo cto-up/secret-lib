@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"ctoup.com/coreapp/api/helpers"
-	"ctoup.com/coreapp/pkg/shared/auth"
+	"github.com/cto-up/core-lib/api/helpers"
+	"github.com/cto-up/core-lib/pkg/shared/auth"
 	api "github.com/cto-up/secret-lib/api/openapi"
 	"github.com/cto-up/secret-lib/pkg/db"
 	"github.com/cto-up/secret-lib/pkg/db/repository"
